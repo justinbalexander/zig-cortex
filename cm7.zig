@@ -1,5 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
+const builtin = std.builtin;
 
 const SCS_BASE = 0xE000E000;
 const ITM_BASE = 0xE0000000;
@@ -23,7 +24,7 @@ const CoreDebug_Regs = @intToPtr(*volatile CoreDebug_Type, CoreDebug_BASE);
 const MPU_Regs = @intToPtr(*volatile MPU_Type, MPU_BASE);
 const FPU_Regs = @intToPtr(*volatile FPU_Type, FPU_BASE);
 
-const SCB_CCR_IC_Mask = 1 << 17;
+const SCB_CCR_IC_Mask: u32 = 1 << 17;
 
 pub fn invalidateICache() void {
     __DSB();
@@ -54,11 +55,11 @@ const DCacheAssociativity = struct {
     ways: u32,
 };
 
-fn getDCacheAssociativity(void) DCacheAssociativity {
+fn getDCacheAssociativity() DCacheAssociativity {
     const SCB_CCSIDR_NUMSETS_Pos = (13);
     const SCB_CCSIDR_NUMSETS_Mask = (0x7FFF << SCB_CCSIDR_NUMSETS_Pos);
     const SCB_CCSIDR_ASSOCIATIVITY_Pos = (3);
-    const SCB_CCSIDR_ASSOCIATIVITY_Mask = (0x3FF << SCB_CCSIDR_ASSOCIATIVITY_Mask);
+    const SCB_CCSIDR_ASSOCIATIVITY_Mask = (0x3FF << SCB_CCSIDR_ASSOCIATIVITY_Pos);
 
     const ccsidr = SCB_Regs.CCSIDR;
 
@@ -78,8 +79,8 @@ fn invalidateSetsAndWays() void {
     while (true) {
         var ways_inner = assoc.ways;
         while (true) {
-            SCB_Regs.DCISW = ((assoc.sets << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Msk) |
-                ((ways << SCB_DCISW_WAY_Pos) & SCB_DCISW_WAY_Msk);
+            SCB_Regs.DCISW = ((assoc.sets << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Mask) |
+                ((ways_inner << SCB_DCISW_WAY_Pos) & SCB_DCISW_WAY_Mask);
             if (ways_inner == 0) break;
             ways_inner -= 1;
         }
@@ -90,16 +91,16 @@ fn invalidateSetsAndWays() void {
 
 fn cleanSetsAndWays() void {
     const SCB_DCCSW_WAY_Pos = (30);
-    const SCB_DCCSW_WAY_Mask = (3 << SCB_DCISW_WAY_Pos);
+    const SCB_DCCSW_WAY_Mask = (3 << SCB_DCCSW_WAY_Pos);
     const SCB_DCCSW_SET_Pos = (5);
-    const SCB_DCCSW_SET_Mask = (0x1FF << SCB_DCISW_SET_Pos);
+    const SCB_DCCSW_SET_Mask = (0x1FF << SCB_DCCSW_SET_Pos);
 
     var assoc = getDCacheAssociativity();
     while (true) {
         var ways_inner = assoc.ways;
         while (true) {
-            SCB_Regs.DCCSW = ((assoc.sets << SCB_DCCSW_SET_Pos) & SCB_DCCSW_SET_Msk) |
-                ((ways << SCB_DCCSW_WAY_Pos) & SCB_DCCSW_WAY_Msk);
+            SCB_Regs.DCCSW = ((assoc.sets << SCB_DCCSW_SET_Pos) & SCB_DCCSW_SET_Mask) |
+                ((ways_inner << SCB_DCCSW_WAY_Pos) & SCB_DCCSW_WAY_Mask);
             if (ways_inner == 0) break;
             ways_inner -= 1;
         }
@@ -130,7 +131,7 @@ pub fn enableDCache() void {
 
 pub fn disableDCache() void {
     const SCB_CCR_DC_Pos = 16;
-    const SCB_CCR_DC_Mask = (1 << SCB_CCR_DC_Pos);
+    const SCB_CCR_DC_Mask: u32 = (1 << SCB_CCR_DC_Pos);
     SCB_Regs.CSSELR = 0;
     __DSB();
     SCB_Regs.CCR &= ~SCB_CCR_DC_Mask;
@@ -151,7 +152,7 @@ pub fn cleanDCache() void {
 pub fn invalidateDCacheByAddress(addr: *allowzero u32, len: i32) void {
     const line_size = 32;
     var data_size = len;
-    var data_addr = @ptrToInt(u32, addr);
+    var data_addr = @ptrToInt(addr);
     __DSB();
     while (data_size > 0) {
         SCB_Regs.DCIMVAC = data_addr;
@@ -165,7 +166,7 @@ pub fn invalidateDCacheByAddress(addr: *allowzero u32, len: i32) void {
 pub fn cleanDCacheByAddress(addr: *allowzero u32, len: i32) void {
     const line_size = 32;
     var data_size = len;
-    var data_addr = @ptrToInt(u32, addr);
+    var data_addr = @ptrToInt(addr);
     __DSB();
     while (data_size > 0) {
         SCB_Regs.DCCMVAC = data_addr;
