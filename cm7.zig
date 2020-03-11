@@ -26,159 +26,294 @@ const FPU_Regs = @intToPtr(*volatile FPU_Type, FPU_BASE);
 
 const SCB_CCR_IC_Mask: u32 = 1 << 17;
 
-pub fn invalidateICache() void {
-    __DSB();
-    __ISB();
-    SCB_Regs.ICIALLU = 0;
-    __DSB();
-    __ISB();
-}
+pub const SCB = struct {
+    /// ARM DUI 0646C Table 4-17
+    const SCB_AIRCR_PRIGROUP_Type = u3;
+    const SCB_AIRCR_PRIGROUP_Pos: u32 = 8;
+    const SCB_AIRCR_PRIGROUP_Mask: u32 = 0x7 << SCB_AIRCR_PRIGROUP_Pos;
+    const SCB_AIRCR_VECTKEYSTAT_Pos: u32 = 16;
+    const SCB_AIRCR_VECTKEYSTAT_Mask: u32 = 0xffff << SCB_AIRCR_VECTKEYSTAT_Pos;
+    const SCB_AIRCR_VECTKEY: u32 = 0x5FA << SCB_AIRCR_VECTKEYSTAT_Pos;
+    const SCB_AIRCR_SYSRESETREQ_Pos: u32 = 2;
+    const SCB_AIRCR_SYSRESETREQ_Mask: u32 = 0x1 << SCB_AIRCR_SYSRESETREQ_Pos;
 
-pub fn enableICache() void {
-    invalidateICache();
-    SCB_Regs.CCR |= SCB_CCR_IC_Mask;
-    __DSB();
-    __ISB();
-}
+    pub fn setPriorityGrouping(priority_group: u32) void {
+        const priority_group_masked = priority_group & std.math.maxInt(SCB_AIRCR_PRIGROUP_Type);
+        const iarcr = SCB_Regs.AIRCR & ~@as(u32, SCB_AIRCR_VECTKEYSTAT_Mask | SCB_AIRCR_PRIGROUP_Mask);
+        SCB_Regs.AIRCR = iarcr |
+            SCB_AIRCR_VECTKEY |
+            priority_group_masked << SCB_AIRCR_PRIGROUP_Pos;
+    }
 
-pub fn disableICache() void {
-    __DSB();
-    __ISB();
-    SCB_Regs.CCR &= ~(SCB_CCR_IC_Mask);
-    SCB_Regs.ICIALLU = 0;
-    __DSB();
-    __ISB();
-}
+    pub fn getPriorityGrouping() SCB_AIRCR_PRIGROUP_Type {
+        return @truncate(SCB_AIRCR_PRIGROUP_Type, SCB_Regs.AIRCR >> SCB_AIRCR_PRIGROUP_Pos);
+    }
 
-const DCacheAssociativity = struct {
-    sets: u32,
-    ways: u32,
+    pub const ConfigurablePriorityExceptions = enum(u4) {
+        MemManageHandler = 4,
+        BusHandler = 5,
+        UsageFaultHandler = 6,
+        SystemHandler7 = 7,
+        SystemHandler8 = 8,
+        SystemHandler9 = 9,
+        SystemHandler10 = 10,
+        SVCallHandler = 11,
+        DebugMonitorHandler = 12,
+        SystemHandler13 = 13,
+        PendSVHandler = 14,
+        SysTickHandler = 15,
+
+        pub fn setPriority(exception: ConfigurablePriorityExceptions, comptime nvic_prio_bits: ?comptime_int, priority: u8) void {
+            const prio_bits = nvic_prio_bits orelse 3;
+            if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
+            const prio_shift = 8 - prio_bits;
+            const exception_number = @enumToInt(exception);
+
+            SCB_Regs.SHPR[exception_number - 4] = priority << prio_shift;
+        }
+
+        pub fn getPriority(exception: ConfigurablePriorityExceptions, comptime nvic_prio_bits: ?comptime_int, priority: u8) u8 {
+            const prio_bits = nvic_prio_bits orelse 3;
+            if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
+            const prio_shift = 8 - prio_bits;
+            const exception_number = @enumToInt(exception);
+
+            return SCB_Regs.SHPR[exception_number - 4] >> prio_shift;
+        }
+    };
+
+    pub const ICache = struct {
+        pub fn invalidate() void {
+            __DSB();
+            __ISB();
+            SCB_Regs.ICIALLU = 0;
+            __DSB();
+            __ISB();
+        }
+
+        pub fn enable() void {
+            invalidate();
+            SCB_Regs.CCR |= SCB_CCR_IC_Mask;
+            __DSB();
+            __ISB();
+        }
+
+        pub fn disable() void {
+            __DSB();
+            __ISB();
+            SCB_Regs.CCR &= ~(SCB_CCR_IC_Mask);
+            SCB_Regs.ICIALLU = 0;
+            __DSB();
+            __ISB();
+        }
+    };
+
+    pub const DCache = struct {
+        const Associativity = struct {
+            sets: u32,
+            ways: u32,
+        };
+
+        fn getAssociativity() Associativity {
+            const SCB_CCSIDR_NUMSETS_Pos = (13);
+            const SCB_CCSIDR_NUMSETS_Mask = (0x7FFF << SCB_CCSIDR_NUMSETS_Pos);
+            const SCB_CCSIDR_ASSOCIATIVITY_Pos = (3);
+            const SCB_CCSIDR_ASSOCIATIVITY_Mask = (0x3FF << SCB_CCSIDR_ASSOCIATIVITY_Pos);
+
+            const ccsidr = SCB_Regs.CCSIDR;
+
+            return .{
+                .sets = (ccsidr & SCB_CCSIDR_NUMSETS_Mask) >> SCB_CCSIDR_NUMSETS_Pos,
+                .ways = (ccsidr & SCB_CCSIDR_ASSOCIATIVITY_Mask) >> SCB_CCSIDR_ASSOCIATIVITY_Pos,
+            };
+        }
+
+        fn invalidateSetsAndWays() void {
+            const SCB_DCISW_WAY_Pos = (30);
+            const SCB_DCISW_WAY_Mask = (3 << SCB_DCISW_WAY_Pos);
+            const SCB_DCISW_SET_Pos = (5);
+            const SCB_DCISW_SET_Mask = (0x1FF << SCB_DCISW_SET_Pos);
+
+            var assoc = getAssociativity();
+            while (true) {
+                var ways_inner = assoc.ways;
+                while (true) {
+                    SCB_Regs.DCISW = ((assoc.sets << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Mask) |
+                        ((ways_inner << SCB_DCISW_WAY_Pos) & SCB_DCISW_WAY_Mask);
+                    if (ways_inner == 0) break;
+                    ways_inner -= 1;
+                }
+                if (assoc.sets == 0) break;
+                assoc.sets -= 1;
+            }
+        }
+
+        fn cleanSetsAndWays() void {
+            const SCB_DCCSW_WAY_Pos = (30);
+            const SCB_DCCSW_WAY_Mask = (3 << SCB_DCCSW_WAY_Pos);
+            const SCB_DCCSW_SET_Pos = (5);
+            const SCB_DCCSW_SET_Mask = (0x1FF << SCB_DCCSW_SET_Pos);
+
+            var assoc = getAssociativity();
+            while (true) {
+                var ways_inner = assoc.ways;
+                while (true) {
+                    SCB_Regs.DCCSW = ((assoc.sets << SCB_DCCSW_SET_Pos) & SCB_DCCSW_SET_Mask) |
+                        ((ways_inner << SCB_DCCSW_WAY_Pos) & SCB_DCCSW_WAY_Mask);
+                    if (ways_inner == 0) break;
+                    ways_inner -= 1;
+                }
+                if (assoc.sets == 0) break;
+                assoc.sets -= 1;
+            }
+        }
+
+        pub fn invalidate() void {
+            SCB_Regs.CSSELR = 0;
+            __DSB();
+            invalidateSetsAndWays();
+            __DSB();
+            __ISB();
+        }
+
+        pub fn enable() void {
+            const SCB_CCR_DC_Pos = 16;
+            const SCB_CCR_DC_Mask = (1 << SCB_CCR_DC_Pos);
+            SCB_Regs.CSSELR = 0;
+            __DSB();
+            invalidateSetsAndWays();
+            __DSB();
+            SCB_Regs.CCR |= SCB_CCR_DC_Mask;
+            __DSB();
+            __ISB();
+        }
+
+        pub fn disable() void {
+            const SCB_CCR_DC_Pos = 16;
+            const SCB_CCR_DC_Mask: u32 = (1 << SCB_CCR_DC_Pos);
+            SCB_Regs.CSSELR = 0;
+            __DSB();
+            SCB_Regs.CCR &= ~SCB_CCR_DC_Mask;
+            __DSB();
+            invalidateSetsAndWays();
+            __DSB();
+            __ISB();
+        }
+
+        pub fn clean() void {
+            SCB_Regs.CSSELR = 0;
+            __DSB();
+            cleanSetsAndWays();
+            __DSB();
+            __ISB();
+        }
+
+        pub fn invalidateByAddress(addr: *allowzero u32, len: i32) void {
+            const line_size = 32;
+            var data_size = len;
+            var data_addr = @ptrToInt(addr);
+            __DSB();
+            while (data_size > 0) {
+                SCB_Regs.DCIMVAC = data_addr;
+                data_addr +%= line_size;
+                data_size -= line_size;
+            }
+            __DSB();
+            __ISB();
+        }
+
+        pub fn cleanByAddress(addr: *allowzero u32, len: i32) void {
+            const line_size = 32;
+            var data_size = len;
+            var data_addr = @ptrToInt(addr);
+            __DSB();
+            while (data_size > 0) {
+                SCB_Regs.DCCMVAC = data_addr;
+                data_addr +%= line_size;
+                data_size -= line_size;
+            }
+            __DSB();
+            __ISB();
+        }
+
+        pub fn cleanInvalidateByAddress(addr: *allowzero u32, len: i32) void {
+            invalidateByAddress(addr, len);
+        }
+    };
+
+    pub fn systemReset() noreturn {
+        __DSB();
+        SCB_Regs.AIRCR = SCB_AIRCR_VECTKEY |
+            (SCB_Regs.AIRCR & SCB_AIRCR_PRIGROUP_Mask) |
+            SCB_AIRCR_SYSRESETREQ_Mask;
+        __DSB();
+        while (true) {}
+    }
 };
 
-fn getDCacheAssociativity() DCacheAssociativity {
-    const SCB_CCSIDR_NUMSETS_Pos = (13);
-    const SCB_CCSIDR_NUMSETS_Mask = (0x7FFF << SCB_CCSIDR_NUMSETS_Pos);
-    const SCB_CCSIDR_ASSOCIATIVITY_Pos = (3);
-    const SCB_CCSIDR_ASSOCIATIVITY_Mask = (0x3FF << SCB_CCSIDR_ASSOCIATIVITY_Pos);
-
-    const ccsidr = SCB_Regs.CCSIDR;
-
-    return .{
-        .sets = (ccsidr & SCB_CCSIDR_NUMSETS_Mask) >> SCB_CCSIDR_NUMSETS_Pos,
-        .ways = (ccsidr & SCB_CCSIDR_ASSOCIATIVITY_Mask) >> SCB_CCSIDR_ASSOCIATIVITY_Pos,
-    };
+test "Semantic Analyze ConfigurablePriorityExceptions" {
+    std.meta.refAllDecls(SCB);
 }
 
-fn invalidateSetsAndWays() void {
-    const SCB_DCISW_WAY_Pos = (30);
-    const SCB_DCISW_WAY_Mask = (3 << SCB_DCISW_WAY_Pos);
-    const SCB_DCISW_SET_Pos = (5);
-    const SCB_DCISW_SET_Mask = (0x1FF << SCB_DCISW_SET_Pos);
-
-    var assoc = getDCacheAssociativity();
-    while (true) {
-        var ways_inner = assoc.ways;
-        while (true) {
-            SCB_Regs.DCISW = ((assoc.sets << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Mask) |
-                ((ways_inner << SCB_DCISW_WAY_Pos) & SCB_DCISW_WAY_Mask);
-            if (ways_inner == 0) break;
-            ways_inner -= 1;
-        }
-        if (assoc.sets == 0) break;
-        assoc.sets -= 1;
+pub const NVIC = struct {
+    pub fn enableIrq(irq_number: u8) void {
+        const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
+        NVIC_Regs.ISER[irq_number >> 5] = irq_bit;
     }
-}
 
-fn cleanSetsAndWays() void {
-    const SCB_DCCSW_WAY_Pos = (30);
-    const SCB_DCCSW_WAY_Mask = (3 << SCB_DCCSW_WAY_Pos);
-    const SCB_DCCSW_SET_Pos = (5);
-    const SCB_DCCSW_SET_Mask = (0x1FF << SCB_DCCSW_SET_Pos);
-
-    var assoc = getDCacheAssociativity();
-    while (true) {
-        var ways_inner = assoc.ways;
-        while (true) {
-            SCB_Regs.DCCSW = ((assoc.sets << SCB_DCCSW_SET_Pos) & SCB_DCCSW_SET_Mask) |
-                ((ways_inner << SCB_DCCSW_WAY_Pos) & SCB_DCCSW_WAY_Mask);
-            if (ways_inner == 0) break;
-            ways_inner -= 1;
-        }
-        if (assoc.sets == 0) break;
-        assoc.sets -= 1;
+    pub fn getEnableIrq(irq_number: u8) bool {
+        const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
+        return if ((NVIC_Regs.ISER[irq_number >> 5] & irq_bit) == 0) false else true;
     }
-}
 
-pub fn invalidateDCache() void {
-    SCB_Regs.CSSELR = 0;
-    __DSB();
-    invalidateSetsAndWays();
-    __DSB();
-    __ISB();
-}
-
-pub fn enableDCache() void {
-    const SCB_CCR_DC_Pos = 16;
-    const SCB_CCR_DC_Mask = (1 << SCB_CCR_DC_Pos);
-    SCB_Regs.CSSELR = 0;
-    __DSB();
-    invalidateSetsAndWays();
-    __DSB();
-    SCB_Regs.CCR |= SCB_CCR_DC_Mask;
-    __DSB();
-    __ISB();
-}
-
-pub fn disableDCache() void {
-    const SCB_CCR_DC_Pos = 16;
-    const SCB_CCR_DC_Mask: u32 = (1 << SCB_CCR_DC_Pos);
-    SCB_Regs.CSSELR = 0;
-    __DSB();
-    SCB_Regs.CCR &= ~SCB_CCR_DC_Mask;
-    __DSB();
-    invalidateSetsAndWays();
-    __DSB();
-    __ISB();
-}
-
-pub fn cleanDCache() void {
-    SCB_Regs.CSSELR = 0;
-    __DSB();
-    cleanSetsAndWays();
-    __DSB();
-    __ISB();
-}
-
-pub fn invalidateDCacheByAddress(addr: *allowzero u32, len: i32) void {
-    const line_size = 32;
-    var data_size = len;
-    var data_addr = @ptrToInt(addr);
-    __DSB();
-    while (data_size > 0) {
-        SCB_Regs.DCIMVAC = data_addr;
-        data_addr +%= line_size;
-        data_size -= line_size;
+    pub fn disableIrq(irq_number: u8) void {
+        const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
+        NVIC_Regs.ICER[irq_number >> 5] = irq_bit;
+        __DSB();
+        __ISB();
     }
-    __DSB();
-    __ISB();
-}
 
-pub fn cleanDCacheByAddress(addr: *allowzero u32, len: i32) void {
-    const line_size = 32;
-    var data_size = len;
-    var data_addr = @ptrToInt(addr);
-    __DSB();
-    while (data_size > 0) {
-        SCB_Regs.DCCMVAC = data_addr;
-        data_addr +%= line_size;
-        data_size -= line_size;
+    pub fn getPendingIrq(irq_number: u8) bool {
+        const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
+        return if ((NVIC_Regs.ISPR[irq_number >> 5] & irq_bit) == 0) false else true;
     }
-    __DSB();
-    __ISB();
-}
 
-pub fn cleanInvalidateDCacheByAddress(addr: *allowzero u32, len: i32) void {
-    invalidateDCacheByAddress(addr, len);
+    pub fn setPendingIrq(irq_number: u8) void {
+        const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
+        NVIC_Regs.ISPR[irq_number >> 5] = irq_bit;
+    }
+
+    pub fn clearPendingIrq(irq_number: u8) void {
+        const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
+        NVIC_Regs.ICPR[irq_number >> 5] = irq_bit;
+    }
+
+    pub fn getActive(irq_number: u8) bool {
+        const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
+        return if ((NVIC_Regs.IABR[irq_number >> 5] & irq_bit) == 0) false else true;
+    }
+
+    pub fn setIrqPriority(comptime nvic_prio_bits: ?comptime_int, irq_number: u8, priority: u8) void {
+        const prio_bits = nvic_prio_bits orelse 3;
+        if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
+        const prio_shift = 8 - prio_bits;
+        if (irq_number >= NVIC_Regs.IP.len) return;
+
+        NVIC_Regs.IP[irq_number] = priority << prio_shift;
+    }
+
+    pub fn getIrqPriority(comptime nvic_prio_bits: ?comptime_int, irq_number: u8, priority: u8) void {
+        const prio_bits = nvic_prio_bits orelse 3;
+        if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
+        const prio_shift = 8 - prio_bits;
+        if (irq_number >= NVIC_Regs.IP.len) return;
+
+        return NVIC_Regs.IP[irq_number] >> prio_shift;
+    }
+};
+
+test "NVIC Semantic Analysis" {
+    std.meta.refAllDecls(NVIC);
 }
 
 pub inline fn __DSB() void {
