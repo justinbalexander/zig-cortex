@@ -323,6 +323,47 @@ test "NVIC Semantic Analysis" {
     std.meta.refAllDecls(NVIC);
 }
 
+pub const SysTick = struct {
+    pub const CTRL_COUNTFLAG_Pos = 16;
+    pub const CTRL_COUNTFLAG_Mask = 1 << CTRL_COUNTFLAG_Pos;
+    pub const CTRL_CLKSOURCE_Pos = 2;
+    pub const CTRL_CLKSOURCE_Mask = 1 << CTRL_CLKSOURCE_Pos;
+    pub const CTRL_TICKINT_Pos = 1;
+    pub const CTRL_TICKINT_Mask = 1 << CTRL_TICKINT_Pos;
+    pub const CTRL_ENABLE_Mask = 1;
+    pub const LOAD_RELOAD_Mask = 0xFFFFFF;
+    pub const VAL_CURRENT_Mask = 0xFFFFFF;
+    pub const CALIB_NOREF_Pos = 31;
+    pub const CALIB_NOREF_Mask = 1 << CALIB_NOREF_Pos;
+    pub const CALIB_SKEW_Pos = 30;
+    pub const CALIB_SKEW_Mask = 1 << CALIB_SKEW_Pos;
+    pub const CALIB_TENMS_Mask = 0xFFFFFF;
+
+    pub const ClockSource = enum(u1) {
+        External,
+        Processor,
+    };
+
+    pub fn config(comptime nvic_prio_bits: ?comptime_int, comptime clock: ClockSource, comptime interrupt: bool, comptime enable: bool, reload_value: u24) void {
+        SysTick_Regs.LOAD = reload_value;
+        const prio_bits = sanitizeNvicPrioBits(nvic_prio_bits);
+        SCB.Exceptions.SysTickHandler.setPriority(nvic_prio_bits, (1 << prio_bits) - 1);
+        SysTick_Regs.VAL = 0;
+        const clock_setting = if (clock == .Processor) CTRL_CLKSOURCE_Mask else 0;
+        const interrupt_setting = if (interrupt) CTRL_TICKINT_Mask else 0;
+        const enable_setting = if (enable) CTRL_ENABLE_Mask else 0;
+        SysTick_Regs.CTRL = clock_setting | interrupt_setting | enable_setting;
+    }
+
+    pub fn getTenMsCalibratedTicks() u24 {
+        return @truncate(u24, SysTick_Regs.CALIB);
+    }
+};
+
+test "SysTick Semantic Analysis" {
+    std.meta.refAllDecls(SysTick);
+}
+
 pub inline fn __DSB() void {
     asm volatile ("dsb"
         :
