@@ -13,16 +13,16 @@ const NVIC_BASE = SCS_BASE + 0x0100;
 const SCB_BASE = SCS_BASE + 0x0D00;
 const MPU_BASE = SCS_BASE + 0x0D90;
 
-const SCnSCB_Regs = @intToPtr(*volatile SCnSCB_Type, SCS_BASE);
-const SCB_Regs = @intToPtr(*volatile SCB_Type, SCB_BASE);
-const SysTick_Regs = @intToPtr(*volatile SysTick_Type, SysTick_BASE);
-const NVIC_Regs = @intToPtr(*volatile NVIC_Type, NVIC_BASE);
-const ITM_Regs = @intToPtr(*volatile ITM_Type, ITM_BASE);
-const DWT_Regs = @intToPtr(*volatile DWT_Type, DWT_BASE);
-const TPI_Regs = @intToPtr(*volatile TPI_Type, TPI_BASE);
-const CoreDebug_Regs = @intToPtr(*volatile CoreDebug_Type, CoreDebug_BASE);
-const MPU_Regs = @intToPtr(*volatile MPU_Type, MPU_BASE);
-const FPU_Regs = @intToPtr(*volatile FPU_Type, FPU_BASE);
+const SCnSCB_Regs = @intToPtr(*align(4) volatile SCnSCB_Type, SCS_BASE);
+const SCB_Regs = @intToPtr(*align(4) volatile SCB_Type, SCB_BASE);
+const SysTick_Regs = @intToPtr(*align(4) volatile SysTick_Type, SysTick_BASE);
+const NVIC_Regs = @intToPtr(*align(4) volatile NVIC_Type, NVIC_BASE);
+const ITM_Regs = @intToPtr(*align(4) volatile ITM_Type, ITM_BASE);
+const DWT_Regs = @intToPtr(*align(4) volatile DWT_Type, DWT_BASE);
+const TPI_Regs = @intToPtr(*align(4) volatile TPI_Type, TPI_BASE);
+const CoreDebug_Regs = @intToPtr(*align(4) volatile CoreDebug_Type, CoreDebug_BASE);
+const MPU_Regs = @intToPtr(*align(4) volatile MPU_Type, MPU_BASE);
+const FPU_Regs = @intToPtr(*align(4) volatile FPU_Type, FPU_BASE);
 
 const nvic_prio_bits_default = 3;
 
