@@ -24,7 +24,13 @@ const CoreDebug_Regs = @intToPtr(*volatile CoreDebug_Type, CoreDebug_BASE);
 const MPU_Regs = @intToPtr(*volatile MPU_Type, MPU_BASE);
 const FPU_Regs = @intToPtr(*volatile FPU_Type, FPU_BASE);
 
-const SCB_CCR_IC_Mask: u32 = 1 << 17;
+const nvic_prio_bits_default = 3;
+
+fn sanitizeNvicPrioBits(comptime bits: ?comptime_int) comptime_int {
+    const prio_bits = bits orelse nvic_prio_bits_default;
+    if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
+    return prio_bits;
+}
 
 pub const SCB = struct {
     /// ARM DUI 0646C Table 4-17
@@ -36,6 +42,7 @@ pub const SCB = struct {
     const SCB_AIRCR_VECTKEY: u32 = 0x5FA << SCB_AIRCR_VECTKEYSTAT_Pos;
     const SCB_AIRCR_SYSRESETREQ_Pos: u32 = 2;
     const SCB_AIRCR_SYSRESETREQ_Mask: u32 = 0x1 << SCB_AIRCR_SYSRESETREQ_Pos;
+    const SCB_CCR_IC_Mask: u32 = 1 << 17;
 
     pub fn setPriorityGrouping(priority_group: u32) void {
         const priority_group_masked = priority_group & std.math.maxInt(SCB_AIRCR_PRIGROUP_Type);
@@ -49,7 +56,7 @@ pub const SCB = struct {
         return @truncate(SCB_AIRCR_PRIGROUP_Type, SCB_Regs.AIRCR >> SCB_AIRCR_PRIGROUP_Pos);
     }
 
-    pub const ConfigurablePriorityExceptions = enum(u4) {
+    pub const Exceptions = enum(u4) {
         MemManageHandler = 4,
         BusHandler = 5,
         UsageFaultHandler = 6,
@@ -63,7 +70,9 @@ pub const SCB = struct {
         PendSVHandler = 14,
         SysTickHandler = 15,
 
-        pub fn setPriority(exception: ConfigurablePriorityExceptions, comptime nvic_prio_bits: ?comptime_int, priority: u8) void {
+        const Self = @This();
+
+        pub fn setPriority(exception: Self, comptime nvic_prio_bits: ?comptime_int, priority: u8) void {
             const prio_bits = nvic_prio_bits orelse 3;
             if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
             const prio_shift = 8 - prio_bits;
@@ -72,7 +81,7 @@ pub const SCB = struct {
             SCB_Regs.SHPR[exception_number - 4] = priority << prio_shift;
         }
 
-        pub fn getPriority(exception: ConfigurablePriorityExceptions, comptime nvic_prio_bits: ?comptime_int, priority: u8) u8 {
+        pub fn getPriority(exception: Self, comptime nvic_prio_bits: ?comptime_int, priority: u8) u8 {
             const prio_bits = nvic_prio_bits orelse 3;
             if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
             const prio_shift = 8 - prio_bits;
@@ -294,8 +303,7 @@ pub const NVIC = struct {
     }
 
     pub fn setIrqPriority(comptime nvic_prio_bits: ?comptime_int, irq_number: u8, priority: u8) void {
-        const prio_bits = nvic_prio_bits orelse 3;
-        if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
+        const prio_bits = sanitizeNvicPrioBits(nvic_prio_bits);
         const prio_shift = 8 - prio_bits;
         if (irq_number >= NVIC_Regs.IP.len) return;
 
@@ -303,8 +311,7 @@ pub const NVIC = struct {
     }
 
     pub fn getIrqPriority(comptime nvic_prio_bits: ?comptime_int, irq_number: u8, priority: u8) void {
-        const prio_bits = nvic_prio_bits orelse 3;
-        if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
+        const prio_bits = sanitizeNvicPrioBits(nvic_prio_bits);
         const prio_shift = 8 - prio_bits;
         if (irq_number >= NVIC_Regs.IP.len) return;
 
