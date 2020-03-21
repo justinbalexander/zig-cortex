@@ -34,7 +34,6 @@ fn sanitizeNvicPrioBits(comptime bits: ?comptime_int) comptime_int {
 
 pub const SCB = struct {
     /// ARM DUI 0646C Table 4-17
-    const SCB_AIRCR_PRIGROUP_Type = u3;
     const SCB_AIRCR_PRIGROUP_Pos: u32 = 8;
     const SCB_AIRCR_PRIGROUP_Mask: u32 = 0x7 << SCB_AIRCR_PRIGROUP_Pos;
     const SCB_AIRCR_VECTKEYSTAT_Pos: u32 = 16;
@@ -44,17 +43,27 @@ pub const SCB = struct {
     const SCB_AIRCR_SYSRESETREQ_Mask: u32 = 0x1 << SCB_AIRCR_SYSRESETREQ_Pos;
     const SCB_CCR_IC_Mask: u32 = 1 << 17;
 
-    pub fn setPriorityGrouping(priority_group: u32) void {
-        const priority_group_masked = priority_group & std.math.maxInt(SCB_AIRCR_PRIGROUP_Type);
-        const iarcr = SCB_Regs.AIRCR & ~@as(u32, SCB_AIRCR_VECTKEYSTAT_Mask | SCB_AIRCR_PRIGROUP_Mask);
-        SCB_Regs.AIRCR = iarcr |
-            SCB_AIRCR_VECTKEY |
-            priority_group_masked << SCB_AIRCR_PRIGROUP_Pos;
-    }
+    pub const PriorityBitsGrouping = enum(u3) {
+        GroupPriorityBits_7,
+        GroupPriorityBits_6,
+        GroupPriorityBits_5,
+        GroupPriorityBits_4,
+        GroupPriorityBits_3,
+        GroupPriorityBits_2,
+        GroupPriorityBits_1,
+        GroupPriorityBits_0,
 
-    pub fn getPriorityGrouping() SCB_AIRCR_PRIGROUP_Type {
-        return @truncate(SCB_AIRCR_PRIGROUP_Type, SCB_Regs.AIRCR >> SCB_AIRCR_PRIGROUP_Pos);
-    }
+        pub fn set(priority_group: PriorityBitsGrouping) void {
+            const iarcr = SCB_Regs.AIRCR & ~@as(u32, SCB_AIRCR_VECTKEYSTAT_Mask | SCB_AIRCR_PRIGROUP_Mask);
+            SCB_Regs.AIRCR = iarcr |
+                SCB_AIRCR_VECTKEY |
+                @as(u32, @enumToInt(priority_group)) << SCB_AIRCR_PRIGROUP_Pos;
+        }
+
+        pub fn get() PriGroup {
+            return @intToEnum(@truncate(@TagType(PriorityBitsGrouping), SCB_Regs.AIRCR >> SCB_AIRCR_PRIGROUP_Pos));
+        }
+    };
 
     pub const Exceptions = enum(u4) {
         MemManageHandler = 4,
