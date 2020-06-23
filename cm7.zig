@@ -1,4 +1,5 @@
 const std = @import("std");
+const config = @import("config.zig");
 const assert = std.debug.assert;
 const builtin = std.builtin;
 
@@ -23,14 +24,6 @@ const TPI_Regs = @intToPtr(*align(4) volatile TPI_Type, TPI_BASE);
 const CoreDebug_Regs = @intToPtr(*align(4) volatile CoreDebug_Type, CoreDebug_BASE);
 const MPU_Regs = @intToPtr(*align(4) volatile MPU_Type, MPU_BASE);
 const FPU_Regs = @intToPtr(*align(4) volatile FPU_Type, FPU_BASE);
-
-const nvic_prio_bits_default = 3;
-
-fn sanitizeNvicPrioBits(comptime bits: ?comptime_int) comptime_int {
-    const prio_bits = bits orelse nvic_prio_bits_default;
-    if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
-    return prio_bits;
-}
 
 pub const SCB = struct {
     /// ARM DUI 0646C Table 4-17
@@ -81,19 +74,15 @@ pub const SCB = struct {
 
         const Self = @This();
 
-        pub fn setPriority(exception: Self, comptime nvic_prio_bits: ?comptime_int, priority: u8) void {
-            const prio_bits = nvic_prio_bits orelse 3;
-            if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
-            const prio_shift = 8 - prio_bits;
+        pub fn setPriority(exception: Self, priority: u8) void {
+            const prio_shift = 8 - config.nvic_priority_bits;
             const exception_number = @enumToInt(exception);
 
             SCB_Regs.SHPR[exception_number - 4] = priority << prio_shift;
         }
 
-        pub fn getPriority(exception: Self, comptime nvic_prio_bits: ?comptime_int, priority: u8) u8 {
-            const prio_bits = nvic_prio_bits orelse 3;
-            if ((prio_bits > 8) or (prio_bits <= 0)) @compileError("Invalid NVIC priority bits number");
-            const prio_shift = 8 - prio_bits;
+        pub fn getPriority(exception: Self, priority: u8) u8 {
+            const prio_shift = 8 - config.nvic_priority_bits;
             const exception_number = @enumToInt(exception);
 
             return SCB_Regs.SHPR[exception_number - 4] >> prio_shift;
@@ -311,20 +300,18 @@ pub const NVIC = struct {
         return if ((NVIC_Regs.IABR[irq_number >> 5] & irq_bit) == 0) false else true;
     }
 
-    pub fn setIrqPriority(comptime nvic_prio_bits: ?comptime_int, irq_number: u8, priority: u8) void {
-        const prio_bits = sanitizeNvicPrioBits(nvic_prio_bits);
-        const prio_shift = 8 - prio_bits;
+    pub fn setIrqPriority(irq_number: u8, priority: u8) void {
+        const prio_shift = 8 - config.nvic_priority_bits;
         if (irq_number >= NVIC_Regs.IP.len) return;
 
         NVIC_Regs.IP[irq_number] = priority << prio_shift;
     }
 
-    pub fn getIrqPriority(comptime nvic_prio_bits: ?comptime_int, irq_number: u8, priority: u8) void {
-        const prio_bits = sanitizeNvicPrioBits(nvic_prio_bits);
-        const prio_shift = 8 - prio_bits;
-        if (irq_number >= NVIC_Regs.IP.len) return;
+    pub fn getIrqPriority(irq_number: u8, priority: u8) u8 {
+        const prio_shift = 8 - config.nvic_priority_bits;
+        assert(irq_number >= NVIC_Regs.IP.len);
 
-        return NVIC_Regs.IP[irq_number] >> prio_shift;
+        return (NVIC_Regs.IP[irq_number] >> prio_shift);
     }
 };
 
@@ -353,10 +340,9 @@ pub const SysTick = struct {
         Processor,
     };
 
-    pub fn config(comptime nvic_prio_bits: ?comptime_int, comptime clock: ClockSource, comptime interrupt: bool, comptime enable: bool, reload_value: u24) void {
+    pub fn config(comptime clock: ClockSource, comptime interrupt: bool, comptime enable: bool, reload_value: u24) void {
         SysTick_Regs.LOAD = reload_value;
-        const prio_bits = sanitizeNvicPrioBits(nvic_prio_bits);
-        SCB.Exceptions.SysTickHandler.setPriority(nvic_prio_bits, (1 << prio_bits) - 1);
+        SCB.Exceptions.SysTickHandler.setPriority((1 << config.nvic_priority_bits) - 1);
         SysTick_Regs.VAL = 0;
         const clock_setting = if (clock == .Processor) CTRL_CLKSOURCE_Mask else 0;
         const interrupt_setting = if (interrupt) CTRL_TICKINT_Mask else 0;
