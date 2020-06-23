@@ -359,57 +359,93 @@ test "SysTick Semantic Analysis" {
     std.meta.refAllDecls(SysTick);
 }
 
-pub inline fn __DSB() void {
-    asm volatile ("dsb"
-        :
-        :
-        : "memory"
-    );
+pub fn __DSB() void {
+    if (!builtin.is_test) {
+        asm volatile ("dsb"
+            :
+            :
+            : "memory"
+        );
+    }
 }
 
-pub inline fn __ISB() void {
-    asm volatile ("isb"
-        :
-        :
-        : "memory"
-    );
+pub fn __ISB() void {
+    if (!builtin.is_test) {
+        asm volatile ("isb"
+            :
+            :
+            : "memory"
+        );
+    }
 }
 
-pub inline fn __DMB() void {
-    asm volatile ("dmb"
-        :
-        :
-        : "memory"
-    );
+pub fn __DMB() void {
+    if (!builtin.is_test) {
+        asm volatile ("dmb"
+            :
+            :
+            : "memory"
+        );
+    }
 }
 
-pub inline fn __NOP() void {
-    asm volatile ("nop");
+pub fn __NOP() void {
+    if (!builtin.is_test) {
+        asm volatile ("nop"
+            :
+            :
+            : "memory"
+        );
+    }
 }
 
-pub inline fn __WFI() void {
-    asm volatile ("wfi");
+pub fn __WFI() void {
+    if (!builtin.is_test) {
+        asm volatile ("wfi"
+            :
+            :
+            : "memory"
+        );
+    }
 }
 
-pub inline fn __WFE() void {
-    asm volatile ("wfe");
+pub fn __WFE() void {
+    if (!builtin.is_test) {
+        asm volatile ("wfe"
+            :
+            :
+            : "memory"
+        );
+    }
 }
 
-pub inline fn __SEV() void {
-    asm volatile ("sev");
+pub fn __SEV() void {
+    if (!builtin.is_test) {
+        asm volatile ("sev"
+            :
+            :
+            : "memory"
+        );
+    }
 }
 
-pub inline fn __get_APSR() usize {
-    var result = asm volatile ("MRS %[result], apsr"
-        : [result] "=r" (-> usize)
-    );
+pub fn __get_APSR() usize {
+    var result = 0;
+    if (!builtin.is_test) {
+        result = asm volatile ("MRS %[result], apsr"
+            : [result] "=r" (-> usize)
+        );
+    }
     return result;
 }
 
-pub inline fn __get_xPSR() usize {
-    var result = asm volatile ("MRS %[result], xpsr"
-        : [result] "=r" (-> usize)
-    );
+pub fn __get_xPSR() usize {
+    var result = 0;
+    if (!builtin.is_test) {
+        result = asm volatile ("MRS %[result], xpsr"
+            : [result] "=r" (-> usize)
+        );
+    }
     return result;
 }
 
