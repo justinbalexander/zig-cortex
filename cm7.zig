@@ -1,7 +1,8 @@
 const std = @import("std");
-const config = @import("config.zig");
+pub const config = @import("config.zig");
 const assert = std.debug.assert;
 const builtin = std.builtin;
+pub usingnamespace @import("common.zig");
 
 const SCS_BASE = 0xE000E000;
 const ITM_BASE = 0xE0000000;
@@ -91,27 +92,27 @@ pub const SCB = struct {
 
     pub const ICache = struct {
         pub fn invalidate() void {
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
             SCB_Regs.ICIALLU = 0;
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn enable() void {
             invalidate();
             SCB_Regs.CCR |= SCB_CCR_IC_Mask;
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn disable() void {
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
             SCB_Regs.CCR &= ~(SCB_CCR_IC_Mask);
             SCB_Regs.ICIALLU = 0;
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
     };
 
@@ -177,70 +178,70 @@ pub const SCB = struct {
 
         pub fn invalidate() void {
             SCB_Regs.CSSELR = 0;
-            __DSB();
+            dsb();
             invalidateSetsAndWays();
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn enable() void {
             const SCB_CCR_DC_Pos = 16;
             const SCB_CCR_DC_Mask = (1 << SCB_CCR_DC_Pos);
             SCB_Regs.CSSELR = 0;
-            __DSB();
+            dsb();
             invalidateSetsAndWays();
-            __DSB();
+            dsb();
             SCB_Regs.CCR |= SCB_CCR_DC_Mask;
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn disable() void {
             const SCB_CCR_DC_Pos = 16;
             const SCB_CCR_DC_Mask: u32 = (1 << SCB_CCR_DC_Pos);
             SCB_Regs.CSSELR = 0;
-            __DSB();
+            dsb();
             SCB_Regs.CCR &= ~SCB_CCR_DC_Mask;
-            __DSB();
+            dsb();
             invalidateSetsAndWays();
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn clean() void {
             SCB_Regs.CSSELR = 0;
-            __DSB();
+            dsb();
             cleanSetsAndWays();
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn invalidateByAddress(addr: *allowzero u32, len: i32) void {
             const line_size = 32;
             var data_size = len;
             var data_addr = @ptrToInt(addr);
-            __DSB();
+            dsb();
             while (data_size > 0) {
                 SCB_Regs.DCIMVAC = data_addr;
                 data_addr +%= line_size;
                 data_size -= line_size;
             }
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn cleanByAddress(addr: *allowzero u32, len: i32) void {
             const line_size = 32;
             var data_size = len;
             var data_addr = @ptrToInt(addr);
-            __DSB();
+            dsb();
             while (data_size > 0) {
                 SCB_Regs.DCCMVAC = data_addr;
                 data_addr +%= line_size;
                 data_size -= line_size;
             }
-            __DSB();
-            __ISB();
+            dsb();
+            isb();
         }
 
         pub fn cleanInvalidateByAddress(addr: *allowzero u32, len: i32) void {
@@ -249,11 +250,11 @@ pub const SCB = struct {
     };
 
     pub fn systemReset() noreturn {
-        __DSB();
+        dsb();
         SCB_Regs.AIRCR = SCB_AIRCR_VECTKEY |
             (SCB_Regs.AIRCR & SCB_AIRCR_PRIGROUP_Mask) |
             SCB_AIRCR_SYSRESETREQ_Mask;
-        __DSB();
+        dsb();
         while (true) {}
     }
 };
@@ -276,8 +277,8 @@ pub const NVIC = struct {
     pub fn disableIrq(irq_number: u8) void {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
         NVIC_Regs.ICER[irq_number >> 5] = irq_bit;
-        __DSB();
-        __ISB();
+        dsb();
+        isb();
     }
 
     pub fn getPendingIrq(irq_number: u8) bool {
@@ -357,76 +358,6 @@ pub const SysTick = struct {
 
 test "SysTick Semantic Analysis" {
     std.meta.refAllDecls(SysTick);
-}
-
-pub fn __DSB() void {
-    if (!builtin.is_test) {
-        asm volatile ("dsb"
-            :
-            :
-            : "memory"
-        );
-    }
-}
-
-pub fn __ISB() void {
-    if (!builtin.is_test) {
-        asm volatile ("isb"
-            :
-            :
-            : "memory"
-        );
-    }
-}
-
-pub fn __DMB() void {
-    if (!builtin.is_test) {
-        asm volatile ("dmb"
-            :
-            :
-            : "memory"
-        );
-    }
-}
-
-pub fn __NOP() void {
-    if (!builtin.is_test) {
-        asm volatile ("nop"
-            :
-            :
-            : "memory"
-        );
-    }
-}
-
-pub fn __WFI() void {
-    if (!builtin.is_test) {
-        asm volatile ("wfi"
-            :
-            :
-            : "memory"
-        );
-    }
-}
-
-pub fn __WFE() void {
-    if (!builtin.is_test) {
-        asm volatile ("wfe"
-            :
-            :
-            : "memory"
-        );
-    }
-}
-
-pub fn __SEV() void {
-    if (!builtin.is_test) {
-        asm volatile ("sev"
-            :
-            :
-            : "memory"
-        );
-    }
 }
 
 pub fn __get_APSR() usize {
