@@ -27,14 +27,14 @@ pub const SCB = struct {
         GroupPriorityBits_0,
 
         pub fn set(priority_group: PriorityBitsGrouping) void {
-            const iarcr = SCB_Regs.AIRCR & ~@as(u32, SCB_AIRCR_VECTKEYSTAT_Mask | SCB_AIRCR_PRIGROUP_Mask);
-            SCB_Regs.AIRCR = iarcr |
+            const iarcr = v7m.SCB.AIRCR & ~@as(u32, SCB_AIRCR_VECTKEYSTAT_Mask | SCB_AIRCR_PRIGROUP_Mask);
+            v7m.SCB.AIRCR = iarcr |
                 SCB_AIRCR_VECTKEY |
                 @as(u32, @enumToInt(priority_group)) << SCB_AIRCR_PRIGROUP_Pos;
         }
 
         pub fn get() PriGroup {
-            return @intToEnum(@truncate(@TagType(PriorityBitsGrouping), SCB_Regs.AIRCR >> SCB_AIRCR_PRIGROUP_Pos));
+            return @intToEnum(@truncate(@TagType(PriorityBitsGrouping), v7m.SCB.AIRCR >> SCB_AIRCR_PRIGROUP_Pos));
         }
     };
 
@@ -58,14 +58,14 @@ pub const SCB = struct {
             const prio_shift = 8 - config.nvic_priority_bits;
             const exception_number = @enumToInt(exception);
 
-            SCB_Regs.SHPR[exception_number - 4] = priority << prio_shift;
+            SCB.SHPR[exception_number - 4] = priority << prio_shift;
         }
 
         pub fn getPriority(exception: Self, priority: u8) u8 {
             const prio_shift = 8 - config.nvic_priority_bits;
             const exception_number = @enumToInt(exception);
 
-            return SCB_Regs.SHPR[exception_number - 4] >> prio_shift;
+            return SCB.SHPR[exception_number - 4] >> prio_shift;
         }
     };
 
@@ -73,14 +73,14 @@ pub const SCB = struct {
         pub fn invalidate() void {
             dsb();
             isb();
-            SCB_Regs.ICIALLU = 0;
+            CACHE_MAINTENANCE.ICIALLU = 0;
             dsb();
             isb();
         }
 
         pub fn enable() void {
             invalidate();
-            SCB_Regs.CCR |= SCB_CCR_IC_Mask;
+            SCB.CCR |= SCB_CCR_IC_Mask;
             dsb();
             isb();
         }
@@ -88,8 +88,8 @@ pub const SCB = struct {
         pub fn disable() void {
             dsb();
             isb();
-            SCB_Regs.CCR &= ~(SCB_CCR_IC_Mask);
-            SCB_Regs.ICIALLU = 0;
+            SCB.CCR &= ~(SCB_CCR_IC_Mask);
+            CACHE_MAINTENANCE.ICIALLU = 0;
             dsb();
             isb();
         }
@@ -107,7 +107,7 @@ pub const SCB = struct {
             const SCB_CCSIDR_ASSOCIATIVITY_Pos = (3);
             const SCB_CCSIDR_ASSOCIATIVITY_Mask = (0x3FF << SCB_CCSIDR_ASSOCIATIVITY_Pos);
 
-            const ccsidr = SCB_Regs.CCSIDR;
+            const ccsidr = SCB.CCSIDR;
 
             return .{
                 .sets = (ccsidr & SCB_CCSIDR_NUMSETS_Mask) >> SCB_CCSIDR_NUMSETS_Pos,
@@ -125,7 +125,7 @@ pub const SCB = struct {
             while (true) {
                 var ways_inner = assoc.ways;
                 while (true) {
-                    SCB_Regs.DCISW = ((assoc.sets << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Mask) |
+                    CACHE_MAINTENANCE.DCISW = ((assoc.sets << SCB_DCISW_SET_Pos) & SCB_DCISW_SET_Mask) |
                         ((ways_inner << SCB_DCISW_WAY_Pos) & SCB_DCISW_WAY_Mask);
                     if (ways_inner == 0) break;
                     ways_inner -= 1;
@@ -145,7 +145,7 @@ pub const SCB = struct {
             while (true) {
                 var ways_inner = assoc.ways;
                 while (true) {
-                    SCB_Regs.DCCSW = ((assoc.sets << SCB_DCCSW_SET_Pos) & SCB_DCCSW_SET_Mask) |
+                    CACHE_MAINTENANCE.DCCSW = ((assoc.sets << SCB_DCCSW_SET_Pos) & SCB_DCCSW_SET_Mask) |
                         ((ways_inner << SCB_DCCSW_WAY_Pos) & SCB_DCCSW_WAY_Mask);
                     if (ways_inner == 0) break;
                     ways_inner -= 1;
@@ -156,7 +156,7 @@ pub const SCB = struct {
         }
 
         pub fn invalidate() void {
-            SCB_Regs.CSSELR = 0;
+            SCB.CSSELR = 0;
             dsb();
             invalidateSetsAndWays();
             dsb();
@@ -166,11 +166,11 @@ pub const SCB = struct {
         pub fn enable() void {
             const SCB_CCR_DC_Pos = 16;
             const SCB_CCR_DC_Mask = (1 << SCB_CCR_DC_Pos);
-            SCB_Regs.CSSELR = 0;
+            SCB.CSSELR = 0;
             dsb();
             invalidateSetsAndWays();
             dsb();
-            SCB_Regs.CCR |= SCB_CCR_DC_Mask;
+            SCB.CCR |= SCB_CCR_DC_Mask;
             dsb();
             isb();
         }
@@ -178,9 +178,9 @@ pub const SCB = struct {
         pub fn disable() void {
             const SCB_CCR_DC_Pos = 16;
             const SCB_CCR_DC_Mask: u32 = (1 << SCB_CCR_DC_Pos);
-            SCB_Regs.CSSELR = 0;
+            SCB.CSSELR = 0;
             dsb();
-            SCB_Regs.CCR &= ~SCB_CCR_DC_Mask;
+            SCB.CCR &= ~SCB_CCR_DC_Mask;
             dsb();
             invalidateSetsAndWays();
             dsb();
@@ -188,7 +188,7 @@ pub const SCB = struct {
         }
 
         pub fn clean() void {
-            SCB_Regs.CSSELR = 0;
+            SCB.CSSELR = 0;
             dsb();
             cleanSetsAndWays();
             dsb();
@@ -201,7 +201,7 @@ pub const SCB = struct {
             var data_addr = @ptrToInt(addr);
             dsb();
             while (data_size > 0) {
-                SCB_Regs.DCIMVAC = data_addr;
+                CACHE_MAINTENANCE.DCIMVAC = data_addr;
                 data_addr +%= line_size;
                 data_size -= line_size;
             }
@@ -215,7 +215,7 @@ pub const SCB = struct {
             var data_addr = @ptrToInt(addr);
             dsb();
             while (data_size > 0) {
-                SCB_Regs.DCCMVAC = data_addr;
+                CACHE_MAINTENANCE.DCCMVAC = data_addr;
                 data_addr +%= line_size;
                 data_size -= line_size;
             }
@@ -230,8 +230,8 @@ pub const SCB = struct {
 
     pub fn systemReset() noreturn {
         dsb();
-        SCB_Regs.AIRCR = SCB_AIRCR_VECTKEY |
-            (SCB_Regs.AIRCR & SCB_AIRCR_PRIGROUP_Mask) |
+        v7m.SCB.AIRCR = SCB_AIRCR_VECTKEY |
+            (v7m.SCB.AIRCR & SCB_AIRCR_PRIGROUP_Mask) |
             SCB_AIRCR_SYSRESETREQ_Mask;
         dsb();
         while (true) {}
@@ -243,55 +243,56 @@ test "Semantic Analyze ConfigurablePriorityExceptions" {
 }
 
 pub const NVIC = struct {
+    // TODO: arch ref manual says irq_number can go up to 495
     pub fn enableIrq(irq_number: u8) void {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
-        NVIC_Regs.ISER[irq_number >> 5] = irq_bit;
+        v7m.NVIC.ISER[irq_number >> 5] = irq_bit;
     }
 
     pub fn getEnableIrq(irq_number: u8) bool {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
-        return if ((NVIC_Regs.ISER[irq_number >> 5] & irq_bit) == 0) false else true;
+        return if ((v7m.NVIC.ISER[irq_number >> 5] & irq_bit) == 0) false else true;
     }
 
     pub fn disableIrq(irq_number: u8) void {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
-        NVIC_Regs.ICER[irq_number >> 5] = irq_bit;
+        v7m.NVIC.ICER[irq_number >> 5] = irq_bit;
         dsb();
         isb();
     }
 
     pub fn getPendingIrq(irq_number: u8) bool {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
-        return if ((NVIC_Regs.ISPR[irq_number >> 5] & irq_bit) == 0) false else true;
+        return if ((v7m.NVIC.ISPR[irq_number >> 5] & irq_bit) == 0) false else true;
     }
 
     pub fn setPendingIrq(irq_number: u8) void {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
-        NVIC_Regs.ISPR[irq_number >> 5] = irq_bit;
+        v7m.NVIC.ISPR[irq_number >> 5] = irq_bit;
     }
 
     pub fn clearPendingIrq(irq_number: u8) void {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
-        NVIC_Regs.ICPR[irq_number >> 5] = irq_bit;
+        v7m.NVIC.ICPR[irq_number >> 5] = irq_bit;
     }
 
     pub fn getActive(irq_number: u8) bool {
         const irq_bit = @as(u32, 1) << @truncate(u5, irq_number);
-        return if ((NVIC_Regs.IABR[irq_number >> 5] & irq_bit) == 0) false else true;
+        return if ((v7m.NVIC.IABR[irq_number >> 5] & irq_bit) == 0) false else true;
     }
 
     pub fn setIrqPriority(irq_number: u8, priority: u8) void {
         const prio_shift = 8 - config.nvic_priority_bits;
-        if (irq_number >= NVIC_Regs.IP.len) return;
+        if (irq_number >= v7m.NVIC.IPR.len) return;
 
-        NVIC_Regs.IP[irq_number] = priority << prio_shift;
+        v7m.NVIC.IPR[irq_number] = priority << prio_shift;
     }
 
     pub fn getIrqPriority(irq_number: u8, priority: u8) u8 {
         const prio_shift = 8 - config.nvic_priority_bits;
-        assert(irq_number >= NVIC_Regs.IP.len);
+        assert(irq_number >= v7m.NVIC.IPR.len);
 
-        return (NVIC_Regs.IP[irq_number] >> prio_shift);
+        return (v7m.NVIC.IPR[irq_number] >> prio_shift);
     }
 };
 
@@ -300,13 +301,13 @@ test "NVIC Semantic Analysis" {
 }
 
 pub const SysTick = struct {
-    pub const CTRL_COUNTFLAG_Pos = 16;
-    pub const CTRL_COUNTFLAG_Mask = 1 << CTRL_COUNTFLAG_Pos;
-    pub const CTRL_CLKSOURCE_Pos = 2;
-    pub const CTRL_CLKSOURCE_Mask = 1 << CTRL_CLKSOURCE_Pos;
-    pub const CTRL_TICKINT_Pos = 1;
-    pub const CTRL_TICKINT_Mask = 1 << CTRL_TICKINT_Pos;
-    pub const CTRL_ENABLE_Mask = 1;
+    pub const CSR_COUNTFLAG_Pos = 16;
+    pub const CSR_COUNTFLAG_Mask = 1 << CSR_COUNTFLAG_Pos;
+    pub const CSR_CLKSOURCE_Pos = 2;
+    pub const CSR_CLKSOURCE_Mask = 1 << CSR_CLKSOURCE_Pos;
+    pub const CSR_TICKINT_Pos = 1;
+    pub const CSR_TICKINT_Mask = 1 << CSR_TICKINT_Pos;
+    pub const CSR_ENABLE_Mask = 1;
     pub const LOAD_RELOAD_Mask = 0xFFFFFF;
     pub const VAL_CURRENT_Mask = 0xFFFFFF;
     pub const CALIB_NOREF_Pos = 31;
@@ -321,17 +322,17 @@ pub const SysTick = struct {
     };
 
     pub fn config(comptime clock: ClockSource, comptime interrupt: bool, comptime enable: bool, reload_value: u24) void {
-        SysTick_Regs.LOAD = reload_value;
+        v7m.SYSTICK.RVR = reload_value;
         SCB.Exceptions.SysTickHandler.setPriority((1 << config.nvic_priority_bits) - 1);
-        SysTick_Regs.VAL = 0;
+        SYSTICK.CVR = 0;
         const clock_setting = if (clock == .Processor) CTRL_CLKSOURCE_Mask else 0;
         const interrupt_setting = if (interrupt) CTRL_TICKINT_Mask else 0;
         const enable_setting = if (enable) CTRL_ENABLE_Mask else 0;
-        SysTick_Regs.CTRL = clock_setting | interrupt_setting | enable_setting;
+        SYSTICK.CSR = clock_setting | interrupt_setting | enable_setting;
     }
 
     pub fn getTenMsCalibratedTicks() u24 {
-        return @truncate(u24, SysTick_Regs.CALIB);
+        return @truncate(u24, v7m.SYSTICK.CALIB);
     }
 };
 
