@@ -70,3 +70,23 @@ pub fn sev() void {
         );
     }
 }
+
+pub fn __get_APSR() usize {
+    var result: u32 = 0;
+    if (!builtin.is_test) {
+        result = asm volatile ("MRS %[result], apsr"
+            : [result] "=r" (-> usize)
+        );
+    }
+    return result;
+}
+
+pub fn __get_xPSR() usize {
+    var result: u32 = 0;
+    if (!builtin.is_test) {
+        result = asm volatile ("MRS %[result], xpsr"
+            : [result] "=r" (-> usize)
+        );
+    }
+    return result;
+}
