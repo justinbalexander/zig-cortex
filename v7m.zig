@@ -1,6 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
-const config = @import("config.zig");
+const cfg = @import("config.zig");
 pub usingnamespace @import("common.zig");
 
 /// ARM DUI 0646C Table 4-17
@@ -61,14 +61,14 @@ pub const Interrupts = struct {
     }
 
     pub fn setPriority(irq_number: u8, priority: u8) void {
-        const prio_shift = 8 - config.nvic_priority_bits;
+        const prio_shift = 8 - cfg.nvic_priority_bits;
         if (irq_number >= NVIC.IPR.len) return;
 
         NVIC.IPR[irq_number] = priority << prio_shift;
     }
 
     pub fn getPriority(irq_number: u8, priority: u8) u8 {
-        const prio_shift = 8 - config.nvic_priority_bits;
+        const prio_shift = 8 - cfg.nvic_priority_bits;
         assert(irq_number >= NVIC.IPR.len);
 
         return (NVIC.IPR[irq_number] >> prio_shift);
@@ -98,7 +98,7 @@ pub const SysTick = struct {
 
     pub fn config(comptime clock: ClockSource, comptime interrupt: bool, comptime enable: bool, reload_value: u24) void {
         SYSTICK.RVR = reload_value;
-        SCB.Exceptions.SysTickHandler.setPriority((1 << config.nvic_priority_bits) - 1);
+        Exceptions.SysTickHandler.setPriority((1 << cfg.nvic_priority_bits) - 1);
         SYSTICK.CVR = 0;
         const clock_setting = if (clock == .Processor) CTRL_CLKSOURCE_Mask else 0;
         const interrupt_setting = if (interrupt) CTRL_TICKINT_Mask else 0;
@@ -152,14 +152,14 @@ pub const Exceptions = enum(u4) {
     const Self = @This();
 
     pub fn setPriority(exception: Self, priority: u8) void {
-        const prio_shift = 8 - config.nvic_priority_bits;
+        const prio_shift = 8 - cfg.nvic_priority_bits;
         const exception_number = @enumToInt(exception);
 
         SCB.SHPR[exception_number - 4] = priority << prio_shift;
     }
 
     pub fn getPriority(exception: Self, priority: u8) u8 {
-        const prio_shift = 8 - config.nvic_priority_bits;
+        const prio_shift = 8 - cfg.nvic_priority_bits;
         const exception_number = @enumToInt(exception);
 
         return SCB.SHPR[exception_number - 4] >> prio_shift;
