@@ -100,9 +100,9 @@ pub const SysTick = struct {
         SYSTICK.RVR = reload_value;
         Exceptions.SysTickHandler.setPriority((1 << cfg.nvic_priority_bits) - 1);
         SYSTICK.CVR = 0;
-        const clock_setting = if (clock == .Processor) CTRL_CLKSOURCE_Mask else 0;
-        const interrupt_setting = if (interrupt) CTRL_TICKINT_Mask else 0;
-        const enable_setting = if (enable) CTRL_ENABLE_Mask else 0;
+        const clock_setting = if (clock == .Processor) CSR_CLKSOURCE_Mask else 0;
+        const interrupt_setting = if (interrupt) CSR_TICKINT_Mask else 0;
+        const enable_setting = if (enable) CSR_ENABLE_Mask else 0;
         SYSTICK.CSR = clock_setting | interrupt_setting | enable_setting;
     }
 
