@@ -12,6 +12,14 @@ const SCB_AIRCR_VECTKEY: u32 = 0x5FA << SCB_AIRCR_VECTKEYSTAT_Pos;
 const SCB_AIRCR_SYSRESETREQ_Pos: u32 = 2;
 const SCB_AIRCR_SYSRESETREQ_Mask: u32 = 0x1 << SCB_AIRCR_SYSRESETREQ_Pos;
 
+pub const FloatingPoint = struct {
+    /// ARM DDI 0403E.b Section B3.3.20
+    pub fn enable() void {
+        // Set CP10 and CP11 Full Access
+        SCB.CPACR |= @as(u32, 0xF) << 20;
+    }
+};
+
 pub fn systemReset() noreturn {
     dsb();
     SCB.AIRCR = SCB_AIRCR_VECTKEY |
