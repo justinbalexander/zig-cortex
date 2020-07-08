@@ -111,14 +111,15 @@ pub const SysTick = struct {
         Processor,
     };
 
-    pub fn config(comptime clock: ClockSource, comptime interrupt: bool, comptime enable: bool, reload_value: u24) void {
+    pub fn config(clock: ClockSource, interrupt: bool, enable: bool, reload_value: u24) void {
         SYSTICK.RVR = reload_value;
         Exceptions.SysTickHandler.setPriority((1 << configuration.nvic_priority_bits) - 1);
         SYSTICK.CVR = 0;
-        const clock_setting = if (clock == .Processor) CSR_CLKSOURCE_Mask else 0;
-        const interrupt_setting = if (interrupt) CSR_TICKINT_Mask else 0;
-        const enable_setting = if (enable) CSR_ENABLE_Mask else 0;
-        SYSTICK.CSR = clock_setting | interrupt_setting | enable_setting;
+        var setting: u32 = 0;
+        if (clock == .Processor) setting |= CSR_CLKSOURCE_Mask;
+        if (interrupt) setting |= CSR_ENABLE_Mask;
+        if (enable) setting |= CSR_ENABLE_Mask;
+        SYSTICK.CSR = setting;
     }
 
     pub fn getTenMsCalibratedTicks() u24 {
