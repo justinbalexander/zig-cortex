@@ -1,6 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
-const cfg = @import("config.zig");
+const assert = std.debug.assert;
+pub const configuration = @import("config.zig");
 pub usingnamespace @import("common.zig");
 
 /// ARM DUI 0646C Table 4-17
@@ -17,6 +18,9 @@ pub const FloatingPoint = struct {
     pub fn enable() void {
         // Set CP10 and CP11 Full Access
         SCB.CPACR |= @as(u32, 0xF) << 20;
+    }
+    test "Semantic Analyze" {
+        std.meta.refAllDecls(@This());
     }
 };
 
@@ -69,17 +73,20 @@ pub const Interrupts = struct {
     }
 
     pub fn setPriority(irq_number: u8, priority: u8) void {
-        const prio_shift = 8 - cfg.nvic_priority_bits;
+        const prio_shift = 8 - configuration.nvic_priority_bits;
         if (irq_number >= NVIC.IPR.len) return;
 
         NVIC.IPR[irq_number] = priority << prio_shift;
     }
 
     pub fn getPriority(irq_number: u8, priority: u8) u8 {
-        const prio_shift = 8 - cfg.nvic_priority_bits;
+        const prio_shift = 8 - configuration.nvic_priority_bits;
         assert(irq_number >= NVIC.IPR.len);
 
         return (NVIC.IPR[irq_number] >> prio_shift);
+    }
+    test "Semantic Analyze" {
+        std.meta.refAllDecls(@This());
     }
 };
 
@@ -106,7 +113,7 @@ pub const SysTick = struct {
 
     pub fn config(comptime clock: ClockSource, comptime interrupt: bool, comptime enable: bool, reload_value: u24) void {
         SYSTICK.RVR = reload_value;
-        Exceptions.SysTickHandler.setPriority((1 << cfg.nvic_priority_bits) - 1);
+        Exceptions.SysTickHandler.setPriority((1 << configuration.nvic_priority_bits) - 1);
         SYSTICK.CVR = 0;
         const clock_setting = if (clock == .Processor) CSR_CLKSOURCE_Mask else 0;
         const interrupt_setting = if (interrupt) CSR_TICKINT_Mask else 0;
@@ -116,6 +123,10 @@ pub const SysTick = struct {
 
     pub fn getTenMsCalibratedTicks() u24 {
         return @truncate(u24, SYSTICK.CALIB);
+    }
+
+    test "Semantic Analyze" {
+        std.meta.refAllDecls(@This());
     }
 };
 
@@ -139,7 +150,11 @@ pub const PriorityBitsGrouping = enum(u3) {
     }
 
     pub fn get() Self {
-        return @intToEnum(@truncate(@TagType(PriorityBitsGrouping), SCB.AIRCR >> SCB_AIRCR_PRIGROUP_Pos));
+        return @intToEnum(PriorityBitsGrouping, @truncate(@TagType(PriorityBitsGrouping), SCB.AIRCR >> SCB_AIRCR_PRIGROUP_Pos));
+    }
+
+    test "Semantic Analyze" {
+        std.meta.refAllDecls(@This());
     }
 };
 
@@ -160,17 +175,21 @@ pub const Exceptions = enum(u4) {
     const Self = @This();
 
     pub fn setPriority(exception: Self, priority: u8) void {
-        const prio_shift = 8 - cfg.nvic_priority_bits;
+        const prio_shift = 8 - configuration.nvic_priority_bits;
         const exception_number = @enumToInt(exception);
 
         SCB.SHPR[exception_number - 4] = priority << prio_shift;
     }
 
     pub fn getPriority(exception: Self, priority: u8) u8 {
-        const prio_shift = 8 - cfg.nvic_priority_bits;
+        const prio_shift = 8 - configuration.nvic_priority_bits;
         const exception_number = @enumToInt(exception);
 
         return SCB.SHPR[exception_number - 4] >> prio_shift;
+    }
+
+    test "Semantic Analyze" {
+        std.meta.refAllDecls(@This());
     }
 };
 
@@ -199,6 +218,10 @@ pub const ICache = struct {
         CACHE_MAINTENANCE.ICIALLU = 0;
         dsb();
         isb();
+    }
+
+    test "Semantic Analyze" {
+        std.meta.refAllDecls(@This());
     }
 };
 
@@ -332,6 +355,10 @@ pub const DCache = struct {
 
     pub fn cleanInvalidateByAddress(addr: *allowzero u32, len: i32) void {
         invalidateByAddress(addr, len);
+    }
+
+    test "Semantic Analyze" {
+        std.meta.refAllDecls(@This());
     }
 };
 
@@ -592,24 +619,6 @@ pub const MCU_ID_Regs = extern struct {
     CID2: u32,
     CID3: u32,
 };
-
-fn bitmask(comptime T: type, bits: u8) T {
-    switch (T) {
-        comptime_int => {
-            var accum: comptime_int = 0;
-            var count = bits;
-            while (count > 0) {
-                accum <<= 1;
-                accum |= 1;
-                count -= 1;
-            }
-            return accum;
-        },
-        else => {
-            return std.math.maxInt(T) >> (std.meta.bitCount(T) - bits);
-        },
-    }
-}
 
 test "Force compiler checks" {
     std.meta.refAllDecls(@This());

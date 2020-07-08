@@ -90,3 +90,21 @@ pub fn __get_xPSR() usize {
     }
     return result;
 }
+
+pub fn bitmask(comptime T: type, bits: u8) T {
+    switch (T) {
+        comptime_int => {
+            var accum: comptime_int = 0;
+            var count = bits;
+            while (count > 0) {
+                accum <<= 1;
+                accum |= 1;
+                count -= 1;
+            }
+            return accum;
+        },
+        else => {
+            return std.math.maxInt(T) >> (std.meta.bitCount(T) - bits);
+        },
+    }
+}
