@@ -117,7 +117,7 @@ pub const SysTick = struct {
         SYSTICK.CVR = 0;
         var setting: u32 = 0;
         if (clock == .Processor) setting |= CSR_CLKSOURCE_Mask;
-        if (interrupt) setting |= CSR_ENABLE_Mask;
+        if (interrupt) setting |= CSR_TICKINT_Mask;
         if (enable) setting |= CSR_ENABLE_Mask;
         SYSTICK.CSR = setting;
     }
