@@ -1,8 +1,10 @@
+const root = @import("root");
 const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
-pub const configuration = @import("config.zig");
 pub usingnamespace @import("common.zig");
+
+const nvic_priority_bits = if (@hasDecl(root, "nvic_priority_bits")) root.nvic_priority_bits else 4;
 
 /// ARM DUI 0646C Table 4-17
 const SCB_AIRCR_PRIGROUP_Pos: u32 = 8;
@@ -73,14 +75,14 @@ pub const Interrupts = struct {
     }
 
     pub fn setPriority(irq_number: u8, priority: u8) void {
-        const prio_shift = 8 - configuration.nvic_priority_bits;
+        const prio_shift = 8 - nvic_priority_bits;
         if (irq_number >= NVIC.IPR.len) return;
 
         NVIC.IPR[irq_number] = priority << prio_shift;
     }
 
     pub fn getPriority(irq_number: u8, priority: u8) u8 {
-        const prio_shift = 8 - configuration.nvic_priority_bits;
+        const prio_shift = 8 - nvic_priority_bits;
         assert(irq_number >= NVIC.IPR.len);
 
         return (NVIC.IPR[irq_number] >> prio_shift);
@@ -113,7 +115,7 @@ pub const SysTick = struct {
 
     pub fn config(clock: ClockSource, interrupt: bool, enable: bool, reload_value: u24) void {
         SYSTICK.RVR = reload_value;
-        Exceptions.SysTickHandler.setPriority((1 << configuration.nvic_priority_bits) - 1);
+        Exceptions.SysTickHandler.setPriority((1 << nvic_priority_bits) - 1);
         SYSTICK.CVR = 0;
         var setting: u32 = 0;
         if (clock == .Processor) setting |= CSR_CLKSOURCE_Mask;
@@ -176,14 +178,14 @@ pub const Exceptions = enum(u4) {
     const Self = @This();
 
     pub fn setPriority(exception: Self, priority: u8) void {
-        const prio_shift = 8 - configuration.nvic_priority_bits;
+        const prio_shift = 8 - nvic_priority_bits;
         const exception_number = @enumToInt(exception);
 
         SCB.SHPR[exception_number - 4] = priority << prio_shift;
     }
 
     pub fn getPriority(exception: Self, priority: u8) u8 {
-        const prio_shift = 8 - configuration.nvic_priority_bits;
+        const prio_shift = 8 - nvic_priority_bits;
         const exception_number = @enumToInt(exception);
 
         return SCB.SHPR[exception_number - 4] >> prio_shift;

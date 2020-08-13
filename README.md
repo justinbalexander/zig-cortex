@@ -21,19 +21,19 @@ manual it was found in.
 
 # Usage
 
-There is an included file config.zig which contains processor specific
-configuration details needed for zig-cortex to work properly.
-
 `nvic_priority_bits` is an implementation (in silicon) defined value and
 defaults to 4 in zig-cortex, which differs from CMSIS which defaults to 3 if the
 preprocessor define is not found. The value for your device can be found in the
-datasheet and must be set in the config file to the correct value for your
-project.
+datasheet and must be a public constant defined in the root file to the correct
+value for your project if your project differs from the default.
 
 Usage example:
 
 ```zig
 const cpu = @import("zig-cortex/v7m.zig");
+
+// zig-cortex configuration variables
+pub const nvic_priority_bits = 3;
 
 pub const xtal = 8000000;
 
